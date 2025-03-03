@@ -17,7 +17,7 @@ class ApiClient private constructor(private val context: Context) {
 
     companion object {
         private const val TAG = "ApiClient"
-        private const val BASE_URL = "http://44.202.114.237:5000/"
+        private const val BASE_URL = "http://3.209.201.129:5000/"
 
         @Volatile
         private var INSTANCE: ApiClient? = null

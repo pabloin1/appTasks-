@@ -1,22 +1,19 @@
-// Archivo: app/src/main/java/com/example/taskapp/data/repository/UserRepositoryImpl.kt
 package com.example.taskapp.data.repository
 
 import android.content.Context
 import android.util.Log
 import com.example.taskapp.data.local.TokenManager
 import com.example.taskapp.data.local.UserManager
-import com.example.taskapp.data.model.Result
-import com.example.taskapp.data.model.User
+import com.example.taskapp.data.mapper.toDomainUser
+import com.example.taskapp.data.mapper.toDataUser
 import com.example.taskapp.data.remote.ApiClient
 import com.example.taskapp.data.remote.dto.AuthRequest
 import com.example.taskapp.data.remote.dto.RegisterRequest
-import com.example.taskapp.data.remote.dto.toUser
+import com.example.taskapp.domain.model.User
+import com.example.taskapp.domain.model.Result
+import com.example.taskapp.domain.repository.UserRepository
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
-import java.io.IOException
-import java.net.SocketTimeoutException
-import java.net.UnknownHostException
-import retrofit2.HttpException
+import kotlinx.coroutines.flow.map
 
 class UserRepositoryImpl private constructor(
     private val context: Context,
@@ -49,97 +46,59 @@ class UserRepositoryImpl private constructor(
     }
 
     override suspend fun loginUser(email: String, password: String): Result<User> {
-        return try {
+        try {
             Log.d(TAG, "Iniciando login para email: $email")
 
             val authRequest = AuthRequest(email, password)
-            Log.d(TAG, "AuthRequest creado: $authRequest")
-
-            Log.d(TAG, "Enviando solicitud a la API")
             val response = apiClient.authService.login(authRequest)
-            Log.d(TAG, "Respuesta recibida: ${response.code()}, mensaje: ${response.message()}")
 
             if (response.isSuccessful && response.body() != null) {
-                Log.d(TAG, "Login exitoso con API")
                 val userDto = response.body()!!
-                Log.d(TAG,userDto.toString())
-                val user = userDto.toUser()
+                val domainUser = userDto.toDomainUser()
 
                 // Guardar datos del usuario y token
-                userManager.saveUser(user)
+                userManager.saveUser(domainUser.toDataUser())
+                tokenManager.saveToken(domainUser.token)
 
-                tokenManager.saveToken(user.token)
-                //Log.d(TAG, "my token ${tokenManager.getToken()}")
-
-                Result.Success(user)
-
+                return Result.Success(domainUser)
             } else {
-                val errorMessage = "Error en login: Código ${response.code()}, mensaje: ${response.message()}"
+                val errorMessage = "Error en login: Código ${response.code()}"
                 Log.e(TAG, errorMessage)
-                Result.Error(Exception(errorMessage))
+                return Result.Error(Exception(errorMessage))
             }
-        } catch (e: SocketTimeoutException) {
-            Log.e(TAG, "Timeout conectando con el servidor", e)
-            Result.Error(Exception("Tiempo de espera agotado. Verifica tu conexión a internet."))
-        } catch (e: UnknownHostException) {
-            Log.e(TAG, "No se pudo resolver el nombre del host", e)
-            Result.Error(Exception("No se puede conectar al servidor. Verifica tu conexión a internet."))
-        } catch (e: IOException) {
-            Log.e(TAG, "Error de entrada/salida", e)
-            Result.Error(Exception("Error de red. Verifica tu conexión a internet."))
-        } catch (e: HttpException) {
-            Log.e(TAG, "Error HTTP: ${e.code()}", e)
-            Result.Error(Exception("Error en la comunicación con el servidor: ${e.message()}"))
         } catch (e: Exception) {
-            Log.e(TAG, "Error desconocido en login", e)
-            Result.Error(e)
+            Log.e(TAG, "Error en login", e)
+            return Result.Error(e)
         }
     }
 
-    override suspend fun registerUser(user: User): Result<User> {
-        return try {
-            Log.d(TAG, "Iniciando registro para usuario: ${user.email}")
-
+    override suspend fun registerUser(name: String, email: String, password: String): Result<User> {
+        try {
             val request = RegisterRequest(
-                name = user.name,
-                email = user.email,
-                password = user.password
+                name = name,
+                email = email,
+                password = password
             )
 
-            Log.d(TAG, "Enviando solicitud de registro a la API")
             val response = apiClient.authService.register(request)
-            Log.d(TAG, "Respuesta de registro recibida: ${response.code()}")
 
             if (response.isSuccessful && response.body() != null) {
-                Log.d(TAG, "Registro exitoso con la API")
                 val userDto = response.body()!!
-                val registeredUser = userDto.toUser()
+                val domainUser = userDto.toDomainUser()
 
                 // Guardar datos del usuario y token
-                userManager.saveUser(registeredUser)
-                tokenManager.saveToken(registeredUser.token)
+                userManager.saveUser(domainUser.toDataUser())
+                tokenManager.saveToken(domainUser.token)
 
-                Result.Success(registeredUser)
+                return Result.Success(domainUser)
             } else {
-                val errorMessage = "Error en registro: Código ${response.code()}, mensaje: ${response.message()}"
+                val errorMessage = "Error en registro: Código ${response.code()}"
                 Log.e(TAG, errorMessage)
-                Result.Error(Exception(errorMessage))
+                return Result.Error(Exception(errorMessage))
             }
-        } catch (e: SocketTimeoutException) {
-            Log.e(TAG, "Timeout conectando con el servidor durante registro", e)
-            Result.Error(Exception("Tiempo de espera agotado. Verifica tu conexión a internet."))
-        } catch (e: UnknownHostException) {
-            Log.e(TAG, "No se pudo resolver el nombre del host durante registro", e)
-            Result.Error(Exception("No se puede conectar al servidor. Verifica tu conexión a internet."))
-        } catch (e: IOException) {
-            Log.e(TAG, "Error de entrada/salida durante registro", e)
-            Result.Error(Exception("Error de red. Verifica tu conexión a internet."))
-        } catch (e: HttpException) {
-            Log.e(TAG, "Error HTTP durante registro: ${e.code()}", e)
-            Result.Error(Exception("Error en la comunicación con el servidor: ${e.message()}"))
         } catch (e: Exception) {
-            Log.e(TAG, "Error desconocido en registro", e)
-            Result.Error(e)
+            Log.e(TAG, "Error en registro", e)
+            return Result.Error(e)
         }
     }
 
@@ -168,6 +127,8 @@ class UserRepositoryImpl private constructor(
     }
 
     override fun getCurrentUser(): Flow<User?> {
-        return userManager.currentUser
+        return userManager.currentUser.map { dataUser ->
+            dataUser?.let { it.toDomainUser() }
+        }
     }
 }

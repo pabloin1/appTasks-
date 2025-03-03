@@ -7,12 +7,12 @@ import androidx.lifecycle.viewModelScope
 import com.example.taskapp.data.model.Result
 import com.example.taskapp.data.model.User
 import com.example.taskapp.data.repository.UserRepository
+import com.example.taskapp.data.repository.UserRepositoryImpl
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import com.example.taskapp.data.repository.UserRepositoryImpl
 
 class RegisterViewModel(private val userRepository: UserRepository) : ViewModel() {
 
@@ -95,10 +95,12 @@ class RegisterViewModel(private val userRepository: UserRepository) : ViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(RegisterViewModel::class.java)) {
-                return RegisterViewModel(UserRepositoryImpl.getInstance(context)) as T
+                // Usamos casting explícito para garantizar la compatibilidad
+                return RegisterViewModel(
+                    UserRepositoryImpl.getInstance(context) as UserRepository
+                ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
         }
     }
-
 }

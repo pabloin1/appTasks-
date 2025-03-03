@@ -1,7 +1,7 @@
-package com.example.taskapp.data.repository
+package com.example.taskapp.domain.repository
 
-import com.example.taskapp.data.model.Result
-import com.example.taskapp.data.model.Task
+import com.example.taskapp.domain.model.Result
+import com.example.taskapp.domain.model.Task
 import kotlinx.coroutines.flow.Flow
 
 interface TaskRepository {

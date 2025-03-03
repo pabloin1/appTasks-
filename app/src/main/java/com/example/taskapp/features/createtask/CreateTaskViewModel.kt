@@ -1,4 +1,3 @@
-// Archivo: app/src/main/java/com/example/taskapp/features/createtask/CreateTaskViewModel.kt
 package com.example.taskapp.features.createtask
 
 import android.content.Context
@@ -8,20 +7,17 @@ import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import com.example.taskapp.data.model.Result
 import com.example.taskapp.data.model.Task
-import com.example.taskapp.data.repository.TaskRepository
-import com.example.taskapp.data.repository.UserRepository
+import com.example.taskapp.core.di.DependencyProvider
+import com.example.taskapp.domain.usecase.task.CreateTaskUseCase
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
-import com.example.taskapp.data.repository.TaskRepositoryImpl
-import com.example.taskapp.data.repository.UserRepositoryImpl
+import com.example.taskapp.domain.model.Result as DomainResult
 
 class CreateTaskViewModel(
-    private val taskRepository: TaskRepository,
-    private val userRepository: UserRepository
+    private val createTaskUseCase: CreateTaskUseCase
 ) : ViewModel() {
 
     companion object {
@@ -52,41 +48,13 @@ class CreateTaskViewModel(
             _state.update { it.copy(isLoading = true, error = null) }
 
             try {
-                Log.d(TAG, "Obteniendo usuario actual")
-                // Obtener el usuario actual
-                val currentUser = userRepository.getCurrentUser().first()
+                Log.d(TAG, "Creando tarea: ${currentState.title}")
 
-                if (currentUser == null) {
-                    Log.e(TAG, "No hay usuario autenticado")
-                    _state.update {
-                        it.copy(
-                            isLoading = false,
-                            error = "No hay usuario autenticado"
-                        )
-                    }
-                    return@launch
-                }
-
-                Log.d(TAG, "Usuario encontrado: ${currentUser._id}")
-
-                // Crear tarea con el ID del usuario
-                val newTask = Task(
-                    title = currentState.title,
-                    description = currentState.description,
-                    userId = currentUser._id,
-                    createdAt = System.currentTimeMillis(),
-                    _id = currentState.title,
-                    Completed = true
-                )
-
-                Log.d(TAG, "Creando tarea: $newTask")
-
-                // Guardar la tarea
-                val result = taskRepository.createTask(newTask)
+                val result = createTaskUseCase(currentState.title, currentState.description)
 
                 when (result) {
-                    is Result.Success -> {
-                        Log.d(TAG, "Tarea creada exitosamente: ${result.data._id}")
+                    is DomainResult.Success -> {
+                        Log.d(TAG, "Tarea creada exitosamente: ${result.data.id}")
                         _state.update {
                             it.copy(
                                 isLoading = false,
@@ -96,7 +64,7 @@ class CreateTaskViewModel(
                             )
                         }
                     }
-                    is Result.Error -> {
+                    is DomainResult.Error -> {
                         Log.e(TAG, "Error al crear tarea", result.exception)
                         _state.update {
                             it.copy(
@@ -105,7 +73,7 @@ class CreateTaskViewModel(
                             )
                         }
                     }
-                    is Result.Loading -> {
+                    is DomainResult.Loading -> {
                         // Estado intermedio, no se maneja explícitamente
                     }
                 }
@@ -127,8 +95,7 @@ class CreateTaskViewModel(
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             if (modelClass.isAssignableFrom(CreateTaskViewModel::class.java)) {
                 return CreateTaskViewModel(
-                    TaskRepositoryImpl.getInstance(context),
-                    UserRepositoryImpl.getInstance(context)
+                    DependencyProvider.provideCreateTaskUseCase(context)
                 ) as T
             }
             throw IllegalArgumentException("Unknown ViewModel class")
